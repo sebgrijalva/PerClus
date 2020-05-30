@@ -1,78 +1,79 @@
 # HOSHEN KOPELMAN ALGORITHM FOR GENERATING CLUSTERS
 ###############################################################################
 
-from numba import jit,prange
+from numba import njit
 import numpy as np
 
-#Define UNION and FIND functions:
+# Define UNION and FIND functions:
 ################################### UNION-FIND ##########################################
-@jit(nopython=True)
-def find(x,label_array):  #find the equivalence class of x
-    y=x
-    #first follow the tree assigned to y to see its equivalence class (seed)
-    while label_array[y] != y:
-        y = label_array[y]
-    #assign the label of y to all the tree.
-    while label_array[x] != x:
-        z = label_array[x]
-        label_array[x] = y
-        x = z
+@njit
+def find(x, labels):
+    '''
+    Finds the equivalence class of an element x in an array
+    '''
+    y = x
+    # first follow the tree assigned to y to see its equivalence class (seed)
+    while labels[y] != y:
+        y = labels[y]
+    # assign the label of y to all the tree (improves speed).
+    while labels[x] != x:
+        z = labels[x] # store original pointer
+        labels[x] = y # relabel pointer
+        x = z # continue relabelling with original pointer
     return y
 
-@jit(nopython=True)
-def union(x,y,label_array):
-#make the equivalence class of x equal to that of y and returns the equiv class
-    label_array[find(x,label_array)] = find(y,label_array)
-    return find(y,label_array)
+@njit
+def union(x, y, labels):
+    '''
+    Make the seed of x equal to that of y and returns
+    said class
+    '''
+    labels[find(x, labels)] = find(y, labels)
+    return find(y,labels)
 
-@jit(nopython=True)
-def make_set(label_array):
-#create a new equivalence class
-    label_array[0] +=1 #add to counter slot
-    label_array[label_array[0]] = label_array[0] #assign equiv class
-    return label_array[0]
-
-@jit(nopython=True)
-def switch(A,B):
-    if A!=0 and B!=0:
-        return 2
-    if (A!=0 and B==0) or (A==0 and B!=0):
-        return 1
-    if A==0 and B==0:
-        return 0
+@njit
+def new_seed(labels):
+    '''
+    Creates a new equivalence class
+    '''
+    labels[0] += 1 # add to slot that counts No. of classes
+    labels[labels[0]] = labels[0] # condition that defines seed
+    return labels[0] # returns updated equivalence class label
 
 #Get clusters
 
 ################ Hoshen-Kopelman Algorithm ####################
-@jit(nopython=True)
-def get_clusters(surface):
-    #calculate clusters of the nodal surface (Using the Hoshen-Kopelman Algorithm):
-    L=len(surface[0])
-    labels = np.array([0 for a in range(L**2) ]) #assume there's a max of L^2 equiv classes.
+@njit
+def get_clusters(surface, periodic = True):
+    '''
+    Calculate clusters of the nodal surface (Using the Hoshen-Kopelman Algorithm)
+    '''
+    L = surface.shape[0]
+    labels = np.zeros(L*L, dtype=np.int8) # Assuming L*L equivalence classes
 
     for i in range(L):
         for j in range(L):
-            if surface[i][j]>0:  #if occupied ...
-                if i==0: up=0 #up=cluster_surf[L-1,j] #upper border
-                else:    up=surface[i-1][j]
+            up, left = 0,0 # assume they are both empty at first
+            if surface[i][j]:  #if occupied
+                if i: up = surface[i-1][j] # upper boundary
+                if j: left = surface[i][j-1] # left boundary
                 #
-                if j==0: left=0 #left=cluster_surf[i,L-1] #left border
-                else:    left=surface[i][j-1]
-                if switch(up,left)==0: surface[i][j] = make_set(labels)      #new cluster
-                if switch(up,left)==1: surface[i][j] = max(up,left)    #whichever is nonzero is labelled
-                if switch(up,left)==2: surface[i][j] = union(up,left,labels)  #add to an equivalence class
+                if up and left: surface[i][j] = new_seed(labels)      #new cluster
+                if (up and not left) or (not up and left): surface[i][j] = max(up, left)  #put the nonzero label
+                if not up and not left: surface[i][j] = union(up, left, labels)  #add to an equivalence class
 
-    #Periodic Boundary Conditions:
-    for j in range(L):
-        if surface[0][j]!= 0 and surface[L-1][j]!= 0:
-            union(surface[0][j],surface[L-1][j],labels)
-    for i in range(L):
-        if surface[i][0]!= 0 and surface[i][L-1]!= 0:
-            union(surface[i][0],surface[i][L-1],labels)
-    #relabel matrix:
+    # Periodic Boundary Conditions:
+    if periodic:
+        for k in range(L):
+            if surface[0][k] and surface[L-1][k]:
+                union(surface[0][k], surface[L-1][k], labels)
+            if surface[k][0] and surface[k][L-1]:
+                union(surface[k][0], surface[k][L-1], labels)
+
+    # Relabel matrix so that only seeds are shown:
     for i in range(L):
         for j in range(L):
-            if surface[i][j]>0:
-                surface[i][j] = find(surface[i][j],labels)
+            if surface[i][j]:
+                surface[i][j] = find(surface[i][j], labels)
 
     return surface
