@@ -1,14 +1,12 @@
 ################# GENERATING RANDOM SURFACES USING FFT #######################
 
 import numpy as np
-from numba import jit,prange
+from numba import jit,njit
 #from scipy import special
-from scipy.fftpack import fft2, ifft2
 import hoshen
 import matplotlib.pyplot as plt
 
-
-@jit(nopython=True)
+@njit
 def berry(size):
     N = 1000
     spectrum=np.zeros((size,size))
@@ -25,17 +23,18 @@ def berry(size):
                 spectrum[i,j] += amp * np.cos( kx*i + ky*j + phase) / np.sqrt(N)
     return 1*(spectrum > 0)
 
-@jit(nopython=True, parallel=True)
+@njit
 def kernel(L, alpha):
     #computes the spectral density in momentum space
-    sp_den = np.zeros((L,L))
-    for k1 in prange(-L//2, L//2):
-        for k2 in prange(-L//2, L//2):
-            sp_den[k1,k2] = np.abs(2*(np.cos(2*np.pi*k1/L)+np.cos(2*np.pi*k2/L)-2))
-    sp_den[0,0]=1
-    return 1/sp_den**(alpha/2)
+    ker = np.zeros((L,L))
+    for k1 in range(-L//2, L//2):
+        for k2 in range(-L//2, L//2):
+            ker[k1,k2] = np.abs(2*np.cos(2*np.pi*k1/L)+2*np.cos(2*np.pi*k2/L)-4)
+    ker[0,0]=1
+    final_ker = ker**(-alpha/2)
+    return np.sqrt(final_ker), L/np.sqrt(np.sum(final_ker))
 
-@jit(nopython=True, parallel=True)
+@njit
 def kernel_smallk(size, alpha):
     #computes the spectral density in momentum space
     sp_den = np.zeros((size,size))
@@ -45,8 +44,7 @@ def kernel_smallk(size, alpha):
     sp_den[0,0]=1
     return 1/sp_den**(alpha)
 
-
-def gaussian_field(L,alpha,spectral_density):
+def gaussian_field(L,alpha,kernel,ker_norm):
     '''Builds a correlated gaussian field on a surface LxL'''
 
     # FFT of gaussian noise:
@@ -54,13 +52,13 @@ def gaussian_field(L,alpha,spectral_density):
     noise_fourier = np.fft.fft2(noise_real)
 
     # Add correlations by Fourier Filtering Method:
-    convolution = noise_fourier*np.sqrt(spectral_density)
+    convolution = noise_fourier * kernel
 
     # Take IFFT and exclude residual complex part
     correlated_noise = np.fft.ifft2(convolution).real
 
     # Return normalized field
-    return correlated_noise * (L/np.sqrt(np.sum(spectral_density)) )
+    return correlated_noise * ker_norm
 ################################################################################
 
 def uniform_field(L, alpha, spectral_density):
@@ -90,7 +88,7 @@ def rectangular_percolation(M, N, p = 0.59274):
     return (surface < p)*1
 
 
-@jit(nopython=True, parallel=True)
+@njit
 def rectangular_kernel(M,N, alpha):
     '''
     computes the spectral density in momentum space:
@@ -139,108 +137,6 @@ def rectangular_gaussian_field(M, N,alpha,spectral_density):
 ###############################################################################
 ###############################################################################
 
-#Test to see scaling of correlations in fractional gaussian surface:
-'''
-L = 2**10
-alphas = [0.5,1., 1.5]
-samples = 200
-
-#radii = np.array([0] + [2**i for i in range(20)] + [3*2**i for i in range(20)] )
-#radii = np.sort(radii[radii <= L//2])
-
-radii = np.sort(
-                np.concatenate(
-                    (np.linspace(10, L//2-1, 30, dtype=np.int16),
-                    np.arange(1,10))
-                    )
-                )
-print(radii)
-
-@jit(nopython = True)
-def measure_field(field, radii):
-    size = field.shape[0]
-    ans = np.zeros(len(radii))
-    for x in range(size//2):
-        for y in range(size//2):
-            ans += np.array([(field[y,x]*field[y,x+r]) for r in radii] )
-    return ans/(size*size/4)
-
-corrs = np.zeros((samples, len(radii)))
-
-for alpha in alphas:
-    print(f'alpha = {alpha}...')
-    ker = kernel(L, alpha)
-    for s in range(samples):
-        corrs[s,:] = measure_field(gaussian_field(L,alpha,ker),radii)
-
-    result = [np.mean(corrs[:,i]) for i in range(len(radii))]
-    error = [2*np.std(corrs[:,i])/np.sqrt(samples) for i in range(len(radii))]
-
-    plt.figure()
-
-    # plot results
-    ax = plt.axes()
-    ax.set_title(f'Alpha = {alpha}')
-    ax.set_xscale("log")
-    ax.set_yscale("log")
-    ax.errorbar(radii,result,yerr=error, capsize=2, ls ='', marker='.')
-    ax.set_xlabel("radii")
-    ax.set_ylabel("correlation")
-
-    # add scaling line:
-    r = np.linspace(0.9,L//2,400)
-    f = result[0]*radii[0]**(2-alpha)*r**(alpha-2)
-    plt.loglog(r, f,'k')
-
-    #np.savetxt(f'data/corr/L={L}-alpha={alpha}-s={samples}.txt',(radii,np.round(result, 5),np.round(error, 5)), fmt='%1.5f')
-
-plt.show()
-'''
-################################################################################
-# Probability of active points in the level sets is long-range correlated
-'''
-L = 2**8
-alphas = [0.75]
-samples = 1000
-
-radii = np.array([0] + [2**i for i in range(20)] + [3*2**i for i in range(20)] + [5*2**i for i in range(20)])
-radii = np.sort(radii[radii <= L//2])
-#print(radii)
-
-@jit(nopython = True, parallel=True)
-def measure_field(field, L, radii):
-    ans = np.zeros(len(radii))
-    for x in prange(1):
-        for y in prange(1):
-            ans += np.array([field[y,x]*field[y,x+r] for r in radii] )
-    return ans
-
-corrs = np.zeros((samples, len(radii)))
-
-for alpha in alphas:
-    spec_d = kernel(L, alpha)
-    for s in range(samples):
-        surf = 1 * (gaussian_field(L,alpha,spec_d) > -0.1992)
-        corrs[s,:] = measure_field(surf,L,radii) - ( np.sum(surf)/(L**2) )**2
-
-    result = [np.mean(corrs[:,i])  for i in range(len(radii))]
-    error = [2*np.std(corrs[:,i])/np.sqrt(samples) for i in range(len(radii))]
-
-    plt.errorbar(
-        x = radii,
-        y = result,
-        yerr = error,
-        capsize = 2)
-
-    # add scaling line:
-    x = np.arange(1,L//2+1)
-    y = 0.2*x**(alpha-2)
-    plt.loglog(x, y,'r')
-
-    #np.savetxt(f'data/corr/L={L}-alpha={alpha}-s={samples}.txt',(radii,np.round(result, 5),np.round(error, 5)), fmt='%1.5f')
-
-plt.show()
-'''
 
 
 ########################################
@@ -342,95 +238,6 @@ plt.show()
 
 
 ####################################################
-
-
-# Binder method to estimate critical level
-'''
-import time
-
-sizes = [8,16,32,64,128,256]
-parameters = np.linspace(0.57,.6,10)
-samples = 2000
-alpha = 0.0
-
-start = time.time()
-for L in sizes:
-    sp_den = build_spden(L,alpha)
-    data = []
-
-    error = []
-    i = 1 #just an index for displaying progresss
-    for h in parameters:
-        print(f'Binder Cumulants: Size {L}, measure {i} of 20...')
-        m2 = np.zeros(samples)
-        m4 = np.zeros(samples)
-        for s in range(samples):
-            #surface = (gaussian_field(L,alpha,sp_den) > h)*1
-            surface = percolation(L,p=h)
-            clusters = hoshen.get_clusters( surface )
-            masses = np.unique(clusters, return_counts=True)[1][1:]/L**2
-            m4[s] = np.sum([x**4 for x in masses])
-            m2[s] = np.sum([x**2 for x in masses])
-        mean_m2 = np.mean(m2)
-        mean_m4 = np.mean(m4)
-        std_m2 = np.std(m2)
-        std_m4 = np.std(m4)
-        data.append(mean_m4/mean_m2**2)
-        error.append( (std_m4/mean_m2**2 + 2*mean_m4*std_m2/mean_m2**3)/np.sqrt(samples) )
-        i += 1
-    #np.savetxt(f'data/binder/L={L}-alpha={alpha}-s={samples}.txt',(parameters,np.round(data, 5),np.round(error, 5)), fmt='%1.5f,')
-    plt.plot(parameters,data,'.',ls="--")
-print(f'Done! Elapsed time: {time.time() - start}')
-#print(data)
-plt.show()
-'''
-
-### Binder Method - Rectangular Arrays ###
-##########################################
-'''
-import time
-
-sizes = [4,8,16,32,64,128]
-#parameters = np.linspace(.57,.6,8)
-parameters = np.linspace(-.25,-.15,10)
-samples = 200
-alpha = 0.25
-
-factor = 2
-start = time.time()
-for L in sizes:
-
-    data = []
-    error = []
-    sp_den = rectangular_spden(L,factor*L,alpha)
-
-    i = 1 #just an index for displaying progresss
-    for h in parameters:
-        print(f'Binder Cumulants: Size {factor*L}x{L}, measure {i} of {len(parameters)}...')
-        m2 = np.zeros(samples)
-        m4 = np.zeros(samples)
-        for s in range(samples):
-            surface = (rectangular_gaussian_field(L,factor*L,alpha,sp_den) > h)*1
-            #surface = rectangular_percolation(factor*L, L, p = h)
-            clusters = hoshen.rectangular_get_clusters( surface )
-            masses = np.unique(clusters, return_counts=True)[1][1:]/(L*factor*L)
-            m4[s] = np.sum([x**4 for x in masses])
-            m2[s] = np.sum([x**2 for x in masses])
-        mean_m2 = np.mean(m2)
-        mean_m4 = np.mean(m4)
-        std_m2 = np.std(m2)
-        std_m4 = np.std(m4)
-        data.append(mean_m4/mean_m2**2)
-        error.append( (std_m4/mean_m2**2 + 2*mean_m4*std_m2/mean_m2**3)/np.sqrt(samples) )
-        i += 1
-    #np.savetxt(f'data/binder/(rectangular)-MxN={factor}-L={L}-alpha={alpha}-s={samples}.txt',(parameters,np.round(data, 5),np.round(error, 5)), fmt='%1.5f,')
-    #np.savetxt(f'data/binder/(rectangular)-MxN={factor}-L={L}-(percolation)-s={samples}.txt',(parameters,np.round(data, 5),np.round(error, 5)), fmt='%1.5f,')
-    plt.plot(parameters,data,'o',ls='--')
-print(f'Done! Elapsed time: {time.time() - start}')
-#print(data)
-
-plt.show()
-'''
 
 ### Check Scaling of Occupation for alpha < 0.5 ###
 '''

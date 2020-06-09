@@ -15,7 +15,7 @@ def find_critical(surface):
     h = 0 # Initial guess level
     dh = 0.2 # Search Step
 
-    while dh > 0.00001:
+    while dh > 0.0001:
         surf = 1 * (surface > h)
         clusters = hoshen.get_clusters(surf, open=True) #get clusters (with OBC!)
 
@@ -29,25 +29,25 @@ def find_critical(surface):
 
         if intersection:
             h += dh
-            dh = dh / 1.2 # decrease step
+            dh = dh / 10 # decrease step
         else:
             h -= dh
 
     return h
 
-alphas = [0.]
-sizes=[8,16,32,64,128]
-sample_set = [3*10**3]*len(sizes)
+alphas = [0.25,0.5]
+sizes=[8,12,16,24,32,48,64,96,128]
+sample_set = [10**7,10**6,10**6,10**5,10**5,10**5,10**5,10**4,10**4]
 
 start = time.time()
 for i,alpha in enumerate(alphas):
-    print(alpha)
+    print(f'Alpha = {alpha}')
     Levels = []
     Err = []
 
-    for L in sizes:
+    for j,L in enumerate(sizes):
         print(f'Currently on size {L}')
-        samples = sample_set[i]
+        samples = sample_set[j]
         ker = randomsurf.kernel(L, alpha)
 
         levels = []
