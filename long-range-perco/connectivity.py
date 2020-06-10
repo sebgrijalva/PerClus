@@ -2,7 +2,7 @@ import numpy as np
 import time
 import matplotlib.pyplot as plt
 
-from numba import jit,prange
+from numba import njit
 
 ########################################"
 
@@ -11,7 +11,7 @@ import randomsurf
 
 ######## CHECK CONNECTIVITY ##########
 ######################################
-@jit(nopython = True)
+@njit
 def three_point(surface,r):
     L = len(surface)
     counts = [0,0,0,0]
@@ -24,7 +24,7 @@ def three_point(surface,r):
                 if surface[(i+r)%L, j] == surface[i, j] == surface[i,(j+r)%L] : counts[3] += 1 #three-point
     return counts
 
-@jit(nopython = True)
+@njit
 def two_point(surface,r):
     L = len(surface)
     counts = 0
@@ -37,7 +37,7 @@ def two_point(surface,r):
 
 ####--- Rectangular Surfaces ---###
 
-@jit(nopython = True)
+@njit
 def rectangular_3pt(surface,r):
     M = surface.shape[0]
     N = surface.shape[1]
@@ -51,7 +51,7 @@ def rectangular_3pt(surface,r):
                 if surface[(i+r)%M, j] == surface[i, j] == surface[i,(j+N)%L] : counts[3] += 1 #three-point
     return counts
 
-@jit(nopython = True)
+@njit
 def rectangular_2pt(surface,r):
     M = surface.shape[0]
     N = surface.shape[1]
@@ -65,7 +65,7 @@ def rectangular_2pt(surface,r):
 
 ################################################################################
 
-@jit(nopython=True)#, parallel = True)
+@njit
 def two_point_full(surface):
     '''takes all the possible distances'''
     L = len(surface)
@@ -91,7 +91,7 @@ def list_duplicates(seq):
         if item: duplicates[item].append(index) #add 'index' to class 'item'
     return (indexes for item,indexes in duplicates.items() if len(indexes) > 1 )
 
-@jit(nopython = True)
+@njit
 def measure_distances(item,L):
     return [[ min(item[j]-item[i], L-(item[j]-item[i])) for j in range(i+1,len(item)) ] for i in range(len(item)-1)]
 
@@ -209,64 +209,70 @@ plt.show()
 ###################################################
 #----------TWO-POINT CONNECTIVITY---
 ###################################################
-'''
-alphas = [2/3., 0.75]
-heights = [-0.2033, -0.1989]
-sample_space = [10000]*5
-sizes = [512]*5
 
-l=0
-for alpha in alphas:
-    L = sizes[l]
+alphas = [0.]
+heights = [-0.23461]
+sample_space = [2]
+sizes = [2**13]
+
+ax = plt.axes()
+ax.set_title(f'Two-Point Correlation Function')
+ax.set_xscale("log")
+ax.set_yscale("log")
+ax.set_xlabel("r")
+ax.set_ylabel("2pt function")
+
+
+for l,alpha in enumerate(alphas):
     h = heights[l]
     samples = sample_space[l]
-    print(f'2pt Connectivity: Samples = {samples}, L = {L}, Alpha= {alpha}')
-    # Build radius array:
-    build = np.sort([2**x for x in range(20)]+[3*2**x for x in range(20)])
-    radius = build[build <= L//2]
+    for L in sizes:
+        print(f'2pt Connectivity: Samples = {samples}, L = {L}, Alpha= {alpha}')
+        # Build radius array:
+        build = np.sort([2**x for x in range(20)]+[3*2**x for x in range(20)])
+        radius = build[build <= L//2]
 
-    #radius = np.arange(1,28)
-    #radius = radius[ radius <= L//2 ]
+        #radius = np.arange(1,28)
+        #radius = radius[ radius <= L//2 ]
 
-    #two_point:
-    result = np.zeros( (samples,len(radius)) )
-    #result = 0
+        #two_point:
+        result = np.zeros( (samples,len(radius)) )
+        #result = 0
 
-    sp_den = randomsurf.build_spden(L,alpha)
-    start1 = time.time()
-    for s in range(samples):
-        #start=time.time()
-        surface = ( randomsurf.gaussian_field(L, alpha,sp_den) > h )*1
-        #surface = randomsurf.percolation(L)
-        #surface = randomsurf.berry(L)
+        ker,norm = randomsurf.kernel(L,alpha)
+        start1 = time.time()
+        for s in range(samples):
+            #start=time.time()
+            surface = ( randomsurf.gaussian_field(L, alpha,ker,norm) > h )*1
+            #surface = randomsurf.percolation(L)
+            #surface = randomsurf.berry(L)
 
-        surface = hoshen.get_clusters( surface )
-        #result += np.array(two_point_full(surface))
+            surface = hoshen.get_clusters( surface )
+            #result += np.array(two_point_full(surface))
 
-        result[s,:] = np.array([two_point(surface, r) for r in radius])/(2*L**2)
+            result[s,:] = np.array([two_point(surface, r) for r in radius])/(2*L**2)
 
-        del surface #dump memory
-    print(f'Total elapsed time = {round(time.time() - start1, 3)}')
-    twopt = [np.mean(result[:,r]) for r in range(len(radius))]
-    error = [np.std(result[:,r])/np.sqrt(samples) for r in range(len(radius))]
+            #del surface #dump memory
+        print(f'Total elapsed time = {round(time.time() - start1, 3)}')
+        twopt = [np.mean(result[:,r]) for r in range(len(radius))]
+        error = [np.std(result[:,r])/np.sqrt(samples) for r in range(len(radius))]
 
-    np.savetxt(f'data/two_point/L={L}-alpha={alpha}-s={samples}.txt',(radius,twopt,error), fmt='%1.4f',)
-    #np.savetxt(f'data/two_point/L={L}-Percolation-s={samples}.txt',(radius,twopt,error), fmt='%1.4f',)
-    plt.errorbar(
-        x = radius,
-        y = twopt,
-        #y = twopt,
-        yerr = error,
-        marker = '.',
-        #color = 'k',
-        capsize = 2,
-        label = f'alpha = {alpha}'
-    )
-    plt.legend()
-    l+=1
+        #np.savetxt(f'data/two_point/L={L}-alpha={alpha}-s={samples}.txt',(radius,twopt,error), fmt='%1.4f',)
+        #np.savetxt(f'data/two_point/L={L}-Percolation-s={samples}.txt',(radius,twopt,error), fmt='%1.4f',)
+        ax.errorbar(
+            x = radius,
+            y = twopt,
+            #y = twopt,
+            yerr = error,
+            marker = '.',
+            #color = 'k',
+            capsize = 2,
+            label = f'alpha = {alpha}'
+        )
+        ax.legend()
 
 plt.show()
-'''
+
 
 # Rectangular Lattice
 '''

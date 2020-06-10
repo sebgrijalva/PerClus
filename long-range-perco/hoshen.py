@@ -28,8 +28,9 @@ def union(x, y, labels):
     Make the seed of x equal to that of y and returns
     said class
     '''
-    labels[find(x, labels)] = find(y, labels)
-    return find(y,labels)
+    target = find(y, labels)
+    labels[find(x, labels)] = target
+    return target
 
 @njit
 def new_seed(labels):
@@ -75,6 +76,7 @@ def get_clusters(surface, open=False, get_masses=False):
             if surface[i][j]:
                 surface[i][j] = find(surface[i][j],labels)
     return surface
+
 
 @njit
 def get_masses(surface, open=False):

@@ -17,7 +17,7 @@ def stats(surface):
 
 sizes = [32,64,128,256]
 #sizes = [24,48,96,192]
-parameters = np.linspace(-0.24,-0.217,8)
+parameters = np.linspace(-0.23,-0.21,8)
 samples = 2*10**3
 alpha = 0.25
 
