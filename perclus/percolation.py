@@ -1,6 +1,7 @@
 import numpy as np
 
-def percolation(M, N, p=0.59274):
+
+class Percolation:
     """Plain Percolation generation of surfaces"""
-    surface = np.random.random((M, N))
-    return int(surface < p)
+    def __init__(self, M, N, p=0.59274):
+        self.surface = int(np.random.random((M, N)) < p)
