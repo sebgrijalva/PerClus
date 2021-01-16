@@ -2,7 +2,7 @@
 
 import numpy as np
 from numba import jit,njit
-#from scipy import special
+
 import hoshen
 import matplotlib.pyplot as plt
 
@@ -59,7 +59,7 @@ def gaussian_field(L,alpha,kernel,ker_norm):
 
     # Return normalized field
     return correlated_noise * ker_norm
-################################################################################
+###############################################################################
 
 def uniform_field(L, alpha, spectral_density):
     '''Build a correlated field from a uniform noise on a surface LxL'''
@@ -76,10 +76,10 @@ def uniform_field(L, alpha, spectral_density):
     # Return normalized field
     return correlated_noise * (L/np.sqrt(np.sum(spectral_density)) )
 
-def percolation(L, p = 0.59274):
-    '''Plain Percolation generation of surfaces'''
+def percolation(L, p=0.59274):
+    """Plain Percolation generation of surfaces"""
     surface = np.random.random((L,L))
-    return (surface < p)*1
+    return int(surface < p)
 
 ###### Rectangular Surfaces ###########
 def rectangular_percolation(M, N, p = 0.59274):
@@ -118,11 +118,11 @@ def rectangular_uniform_field(M, N, alpha, spectral_density):
     # Return normalized field
     return correlated_noise * (np.sqrt(M*N/np.sum(spectral_density)) )
 
-def rectangular_gaussian_field(M, N,alpha,spectral_density):
+def rectangular_gaussian_field(M, N, alpha, spectral_density):
     '''Builds a correlated gaussian field on a surface LxL'''
 
     # FFT of gaussian noise:
-    noise_real = np.random.normal(0, 1, size = (M, N))
+    noise_real = np.random.normal(0, 1, size=(M, N))
     noise_fourier = np.fft.fft2(noise_real)
 
     # Add correlations by Fourier Filtering Method:
