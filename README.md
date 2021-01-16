@@ -1,4 +1,5 @@
-# clusters
-Cluster analysis in 2d lattices. 
+# PerClus
+Cluster analysis of Percolation in 2d lattices.
 
-Basically some code for studying clusters using the Hoshen-Kopelman algorithm
+Study of different setups of percolation using many techniques for cluster
+analysis.
