@@ -29,17 +29,17 @@ class Percolation:
             # real, distributed with mean 0 and std 1
             self.real = np.random.normal(0, 1, size=(self.M, self.N))
 
-        self.fourier = np.fft.fft2(self.real)
+        fourier = np.fft.fft2(self.real)
 
         # Add correlations by Fourier Filtering Method:
         self._build_kernel(self.M, self.N, self.H)
-        self.convolution = self.fourier*np.sqrt(self.kernel)
+        convolution = fourier*np.sqrt(self.kernel)
 
         # Take IFFT and exclude residual complex part
-        self.correlated_noise = np.fft.ifft2(self.convolution).real
+        correlated_noise = np.fft.ifft2(convolution).real
 
         # Return normalized field
-        self.sample = self.correlated_noise * self.norm
+        self.sample = correlated_noise * self.norm
 
 
 class Uncorrelated(Percolation):

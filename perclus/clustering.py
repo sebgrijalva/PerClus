@@ -1,5 +1,5 @@
 import numpy as np
-from numba import njit
+from numba import njit, prange
 
 
 # Define UNION and FIND routines:
@@ -42,7 +42,7 @@ def new_seed(labels):
 
 
 @njit
-def get_clusters(surface, open=False):
+def get_clusters(surface, open=False, get_masses=False):
     '''
     Calculate clusters of the nodal surface (Using the
     Hoshen-Kopelman Algorithm)
@@ -53,8 +53,8 @@ def get_clusters(surface, open=False):
     for i in range(L):
         for j in range(L):
             if surface[i][j]:   # if active site
-                up = (i > 0)*surface[i-1][j]  # upper boundary
-                left = (j > 0)*surface[i][j-1]  # left boundary
+                up = surface[i-1][j] if i > 0 else 0  # upper boundary
+                left = surface[i][j-1] if j > 0 else 0  # left boundary
 
                 if up and left:
                     # add to an equivalence class
@@ -74,15 +74,23 @@ def get_clusters(surface, open=False):
             if surface[k][0] and surface[k][L-1]:
                 union(surface[k][0], surface[k][L-1], labels)
 
+    if get_masses:
+        masses = np.zeros(labels[0], np.int32)  # keep count of masses
+
     for i in range(L):
         for j in range(L):
             if surface[i][j]:
                 # Relabel matrix so that only seeds are shown:
                 surface[i][j] = find(surface[i][j], labels)
+                if get_masses:
+                    x = find(surface[i][j], labels)
+                    masses[x-1] += 1
+    if get_masses:
+        masses = masses[masses > 0]
+    return surface, masses
 
-    return surface, labels
 
-
+@njit
 def get_masses(clusters, labels):
     masses = np.zeros(labels[0], np.int32)  # keep count of masses
     L = clusters.shape[0]
@@ -92,4 +100,4 @@ def get_masses(clusters, labels):
                 x = find(clusters[i][j], labels)
                 masses[x-1] += 1
 
-    return masses[masses > 0]/L**2
+    return masses[masses > 0]
