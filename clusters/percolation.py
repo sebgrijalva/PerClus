@@ -1,4 +1,8 @@
 import numpy as np
+from clusters.classification import hoshenkopelman, hk_masses
+from collections import Counter
+from numba import njit, prange
+
 
 
 class Percolation:
@@ -40,6 +44,18 @@ class Percolation:
 
         # Return normalized field
         self.sample = correlated_noise * self.norm
+
+    def get_clusters(self, method='hoshenkopelman'):
+        if method == 'hoshenkopelman':
+            self.clusters, self.cluster_labels = hoshenkopelman(self.sample)
+        return np.array(self.clusters)
+
+    def get_masses(self, method='hoshenkopelman'):
+        if not hasattr(self, clusters):
+            raise ValueError('Run `get_clusters()` method first')
+        if method == 'hoshenkopelman':
+            self.masses = hk_masses(self.clusters, self.cluster_labels)
+        return np.array(self.masses)
 
 
 class Uncorrelated(Percolation):
