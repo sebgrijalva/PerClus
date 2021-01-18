@@ -1,2 +1,2 @@
 
-from perclus.percolation import Percolation
+from clusters.percolation import Percolation
