@@ -45,16 +45,12 @@ class Percolation:
         # Return normalized field
         self.sample = correlated_noise * self.norm
 
-    def get_clusters(self, method='hoshenkopelman'):
-        if method == 'hoshenkopelman':
-            self.clusters, self.cluster_labels = hoshenkopelman(self.sample)
-        return np.array(self.clusters)
-
     def get_masses(self, method='hoshenkopelman'):
-        if not hasattr(self, clusters):
+        if not hasattr(self, 'clusters'):
             raise ValueError('Run `get_clusters()` method first')
         if method == 'hoshenkopelman':
             self.masses = hk_masses(self.clusters, self.cluster_labels)
+            self.tot_clusters = len(self.masses)
         return np.array(self.masses)
 
 
@@ -64,6 +60,11 @@ class Uncorrelated(Percolation):
         super().__init__(M, N)
         self.sample = np.random.binomial(n=1, p=p, size=(M, N))
 
+    def get_clusters(self, method='hoshenkopelman'):
+        if method == 'hoshenkopelman':
+            self.clusters, self.cluster_labels = hoshenkopelman(self.sample)
+        return np.array(self.clusters)
+
 
 class Correlated(Percolation):
     """Based on a particular Distribution"""
@@ -71,3 +72,10 @@ class Correlated(Percolation):
         super().__init__(M, N, H)
         self.type = type
         self._apply_fourier_filtering(self.type)
+
+    def get_clusters(self, h, method='hoshenkopelman'):
+        if method == 'hoshenkopelman':
+            self.level = h
+            self.level_set = (self.sample > h).astype(int)
+            self.clusters, self.cluster_labels = hoshenkopelman(self.level_set)
+        return np.array(self.clusters)
